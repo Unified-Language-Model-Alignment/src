@@ -42,7 +42,9 @@ def run_ppo(
         ppo_epochs=1,
         max_grad_norm=training_args.max_grad_norm,
         seed=training_args.seed,
-        optimize_cuda_cache=True
+        # log_with=training_args.report_to,
+        optimize_cuda_cache=True,
+        accelerator_kwargs={"step_scheduler_with_optimizer": False}
     )
 
     if finetuning_args.ppo_score_norm:
@@ -79,7 +81,7 @@ def run_ppo(
 
     # Training
     if training_args.do_train:
-        ppo_trainer.ppo_train(max_target_length=data_args.max_target_length)
+        ppo_trainer.ppo_train()
         ppo_trainer.save_model()
         ppo_trainer.save_state() # must be called after save_model to have a folder
         if ppo_trainer.is_world_process_zero() and model_args.plot_loss:

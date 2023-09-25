@@ -33,9 +33,9 @@ class FinetuningArguments:
         metadata={"help": "Name of trainable modules for partial-parameter (freeze) fine-tuning. \
                   LLaMA choices: [\"mlp\", \"self_attn\"], \
                   BLOOM & Falcon & ChatGLM2 choices: [\"mlp\", \"self_attention\"], \
-                  Baichuan choices: [\"mlp\", \"self_attn\"], \
                   Qwen choices: [\"mlp\", \"attn\"], \
-                  LLaMA-2, InternLM, XVERSE choices: the same as LLaMA."}
+                  Phi-1.5 choices: [\"mlp\", \"mixer\"], \
+                  LLaMA-2, Baichuan, InternLM, XVERSE choices: the same as LLaMA."}
     )
     lora_rank: Optional[int] = field(
         default=8,
@@ -56,7 +56,12 @@ class FinetuningArguments:
                   BLOOM & Falcon & ChatGLM2 choices: [\"query_key_value\", \"self_attention.dense\", \"mlp.dense\"], \
                   Baichuan choices: [\"W_pack\", \"o_proj\", \"gate_proj\", \"up_proj\", \"down_proj\"], \
                   Qwen choices: [\"c_attn\", \"attn.c_proj\", \"w1\", \"w2\", \"mlp.c_proj\"], \
+                  Phi-1.5 choices: [\"Wqkv\", \"out_proj\", \"fc1\", \"fc2\"], \
                   LLaMA-2, InternLM, XVERSE choices: the same as LLaMA."}
+    )
+    additional_target: Optional[str] = field(
+        default=None,
+        metadata={"help": "Name(s) of modules apart from LoRA layers to be set as trainable and saved in the final checkpoint."}
     )
     resume_lora_training: Optional[bool] = field(
         default=True,
@@ -70,10 +75,29 @@ class FinetuningArguments:
         default=0.1,
         metadata={"help": "The beta parameter for the DPO loss."}
     )
+    unlikelihood_sft_loss_type: Optional[Literal["logloss", "shifted_ce_loss"]] = field(
+        default="logloss",
+        metadata={"help": "The loss type for demonstration data in unlikelihood"}
+    )
+    ulma_sft_loss_type: Optional[Literal["logloss", "beta_logloss", "shifted_ce_loss", "pointwise_dpo"]] = field(
+        default="logloss",
+        metadata={"help": "The loss type for demonstration data in ulma"}
+    )
+    ulma_preference_loss_type: Optional[Literal["binary", "continuous"]] = field(
+        default="binary",
+        metadata={"help": "The loss type for preference data in ulma"}
+    )
+    ulma_constant_zx: Optional[float] = field(
+        default=0,
+        metadata={"help": "Use a constant value for Z(x), set to 0 to not use this functionality."}
+    )
 
     def __post_init__(self):
         if isinstance(self.lora_target, str): # support custom target modules/layers of LoRA
             self.lora_target = [target.strip() for target in self.lora_target.split(",")]
+
+        if isinstance(self.additional_target, str):
+            self.additional_target = [target.strip() for target in self.additional_target.split(",")]
 
         if self.num_layer_trainable > 0: # fine-tuning the last n layers if num_layer_trainable > 0
             trainable_layer_ids = [self.num_hidden_layers - k - 1 for k in range(self.num_layer_trainable)]

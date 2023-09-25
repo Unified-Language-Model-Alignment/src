@@ -17,7 +17,7 @@ def preprocess_dataset(
     tokenizer: "PreTrainedTokenizer",
     data_args: "DataArguments",
     training_args: "Seq2SeqTrainingArguments",
-    stage: Literal["pt", "sft", "rm", "ppo"]
+    stage: Literal["pt", "sft", "rm", "ppo", "ulma", "unlikelihood"]
 ) -> Union["Dataset", "IterableDataset"]:
     column_names = list(next(iter(dataset)).keys())
     template = get_template_and_fix_tokenizer(data_args.template, tokenizer)
@@ -25,10 +25,12 @@ def preprocess_dataset(
     def construct_example(examples: Dict[str, List[Any]]) -> Generator[Any, None, None]:
         for i in range(len(examples["prompt"])):
             query, response = examples["prompt"][i], examples["response"][i]
+            # Query = prompt (instruction) + query (input)
             query = query + "\n" + examples["query"][i] if "query" in examples and examples["query"][i] else query
             history = examples["history"][i] if "history" in examples else None
             system = examples["system"][i] if "system" in examples else None
-            yield query, response, history, system
+            score = examples["score"][i] if "score" in examples else None
+            yield query, response, history, system, score
 
     def preprocess_pretrain_dataset(examples: Dict[str, List[Any]]) -> Dict[str, Any]:
         # build grouped texts with format `X1 X2 X3 ...`
@@ -60,7 +62,7 @@ def preprocess_dataset(
         model_inputs = {"input_ids": [], "attention_mask": [], "labels": []}
         max_length = data_args.max_source_length + data_args.max_target_length
 
-        for query, response, history, system in construct_example(examples):
+        for query, response, history, system, _ in construct_example(examples):
             input_ids, labels = [], []
 
             for turn_idx, (source_ids, target_ids) in enumerate(template.encode_multiturn(
@@ -86,9 +88,9 @@ def preprocess_dataset(
                 input_ids += [tokenizer.eos_token_id]
                 labels += [tokenizer.eos_token_id]
 
-            model_inputs["input_ids"].append(input_ids)
+            model_inputs["input_ids"].append(input_ids)                  # X1      Y1    X2          Y2 
             model_inputs["attention_mask"].append([1] * len(input_ids))
-            model_inputs["labels"].append(labels)
+            model_inputs["labels"].append(labels)                        # -100... Y1    eos -100... Y2
 
         return model_inputs
 
@@ -96,7 +98,7 @@ def preprocess_dataset(
         # build inputs with format `<bos> X` and labels with format `Y <eos>`
         model_inputs = {"input_ids": [], "attention_mask": [], "labels": []}
 
-        for query, response, history, system in construct_example(examples):
+        for query, response, history, system, _ in construct_example(examples):
             source_ids, target_ids = template.encode_oneturn(tokenizer, query, response, history, system)
 
             if len(source_ids) > data_args.max_source_length:
@@ -107,16 +109,36 @@ def preprocess_dataset(
             if template.efficient_eos:
                 target_ids += [tokenizer.eos_token_id]
 
-            model_inputs["input_ids"].append(source_ids)
+            model_inputs["input_ids"].append(source_ids)    # X
             model_inputs["attention_mask"].append([1] * len(source_ids))
-            model_inputs["labels"].append(target_ids)
+            model_inputs["labels"].append(target_ids)       # Y
 
+        return model_inputs
+    
+    def preprocess_pointwise_dataset(examples: Dict[str, List[Any]]) -> Dict[str, Any]:
+        # build inputs with format `<bos> X` and labels with format `Y <eos>`
+        model_inputs = {"input_ids": [], "output_ids": [], "score": []}
+
+        for query, response, history, system, score in construct_example(examples):
+            input_ids, output_ids = template.encode_oneturn(tokenizer, query, response, history, system)
+
+            if len(input_ids) > data_args.max_source_length:
+                input_ids = input_ids[:data_args.max_source_length]
+            if len(output_ids) > data_args.max_target_length:
+                output_ids = output_ids[:data_args.max_target_length]
+
+            if template.efficient_eos:
+                output_ids += [tokenizer.eos_token_id]
+
+            model_inputs["input_ids"].append(input_ids)
+            model_inputs["output_ids"].append(output_ids)
+            model_inputs["score"].append(score)
         return model_inputs
 
     def preprocess_pairwise_dataset(examples):
         # build input pairs with format `<bos> X`, `Y1 <eos>` and `Y2 <eos>`
         model_inputs = {"prompt_ids": [], "chosen_ids": [], "rejected_ids": []}
-        for query, response, history, system in construct_example(examples):
+        for query, response, history, system, score in construct_example(examples):
             prompt_ids, chosen_ids = template.encode_oneturn(tokenizer, query, response[0], history, system)
             _, rejected_ids = template.encode_oneturn(tokenizer, query, response[1], history, system)
 
@@ -152,6 +174,13 @@ def preprocess_dataset(
         print("rejected_ids:\n{}".format(example["rejected_ids"]))
         print("rejected:\n{}".format(tokenizer.decode(example["rejected_ids"], skip_special_tokens=False)))
 
+    def print_pointwise_dataset_example(example):
+        print("input_ids:\n{}".format(example["input_ids"]))
+        print("prompt:\n{}".format(tokenizer.decode(example["input_ids"], skip_special_tokens=False)))
+        print("output_ids:\n{}".format(example["output_ids"]))
+        print("output:\n{}".format(tokenizer.decode(example["output_ids"], skip_special_tokens=False)))
+        print("score:\n{}".format(example["score"]))
+
     def print_unsupervised_dataset_example(example):
         print("input_ids:\n{}".format(example["input_ids"]))
         print("inputs:\n{}".format(tokenizer.decode(example["input_ids"], skip_special_tokens=False)))
@@ -168,6 +197,14 @@ def preprocess_dataset(
         dataset = dataset.filter(lambda example: example["prompt"] and len(example["response"]) > 1)
         preprocess_function = preprocess_pairwise_dataset
         print_function = print_pairwise_dataset_example
+    elif stage == "ulma":
+        dataset = dataset.filter(lambda example: example["prompt"] and len(example["response"]) > 1)
+        preprocess_function = preprocess_pointwise_dataset
+        print_function = print_pointwise_dataset_example
+    elif stage == "unlikelihood":
+        dataset = dataset.filter(lambda example: example["prompt"] and len(example["response"]) > 1)
+        preprocess_function = preprocess_pointwise_dataset
+        print_function = print_pointwise_dataset_example
     else:
         dataset = dataset.filter(lambda example: example["prompt"])
         preprocess_function = preprocess_unsupervised_dataset

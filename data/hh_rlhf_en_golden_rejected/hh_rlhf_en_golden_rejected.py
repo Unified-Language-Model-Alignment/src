@@ -3,20 +3,19 @@ import datasets
 from typing import Any, Dict, List
 
 
-_DESCRIPTION = "Anthropic Harmless dataset"
+_DESCRIPTION = "Harmless dataset re-written by GPT4"
 _CITATION = ""
-_HOMEPAGE = "https://huggingface.co/datasets/Anthropic/hh-rlhf"
+_HOMEPAGE = "https://huggingface.co/datasets/Unified-Language-Model-Alignment/Anthropic_HH_Golden"
 _LICENSE = "mit"
-_URL = "https://huggingface.co/datasets/Anthropic/hh-rlhf/resolve/main/"
+_URL = "https://huggingface.co/datasets/Unified-Language-Model-Alignment/Anthropic_HH_Golden/resolve/main/"
 _URLS = {
     "train": [
-        _URL + "harmless-base/train.jsonl.gz"
+        _URL + "hh_golden/train.jsonl"
     ],
     "test": [
-        _URL + "harmless-base/test.jsonl.gz"
+        _URL + "hh_golden/test.jsonl"
     ]
 }
-
 
 class HhRlhfEn(datasets.GeneratorBasedBuilder):
 

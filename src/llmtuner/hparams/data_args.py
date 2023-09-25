@@ -16,6 +16,7 @@ class DatasetAttr:
     query: Optional[str] = "input"
     response: Optional[str] = "output"
     history: Optional[str] = None
+    score: Optional[float] = None
 
     def __repr__(self) -> str:
         return self.dataset_name
@@ -41,6 +42,10 @@ class DataArguments:
     split: Optional[str] = field(
         default="train",
         metadata={"help": "Which dataset split to use for training and evaluation."}
+    )
+    cutoff_len: Optional[int] = field(
+        default=1024,
+        metadata={"help": "The maximum length of the model inputs after tokenization."}
     )
     streaming: Optional[bool] = field(
         default=False,
@@ -93,6 +98,10 @@ class DataArguments:
     val_size: Optional[float] = field(
         default=0,
         metadata={"help": "Size of the development set, should be an integer or a float in range `[0,1)`."}
+    )
+    sft_packing: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Packing the questions and answers in the supervised fine-tuning stage."}
     )
 
     def init_for_training(self): # support mixing multiple datasets

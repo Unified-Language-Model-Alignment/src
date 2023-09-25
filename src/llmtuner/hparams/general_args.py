@@ -7,7 +7,7 @@ class GeneralArguments:
     r"""
     Arguments pertaining to which stage we are going to perform.
     """
-    stage: Optional[Literal["pt", "sft", "rm", "ppo", "dpo"]] = field(
+    stage: Optional[Literal["pt", "sft", "rm", "ppo", "dpo", "ulma", "unlikelihood"]] = field(
         default="sft",
         metadata={"help": "Which stage will be performed in training."}
     )

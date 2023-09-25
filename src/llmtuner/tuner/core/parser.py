@@ -8,6 +8,16 @@ from transformers import HfArgumentParser, Seq2SeqTrainingArguments
 from transformers.utils.versions import require_version
 from transformers.trainer_utils import get_last_checkpoint
 
+try:
+    from transformers.utils import is_torch_bf16_gpu_available, is_torch_npu_available, is_torch_cuda_available
+    is_fp16_available = is_torch_cuda_available()
+    is_bf16_available = is_torch_bf16_gpu_available()
+    is_npu_available = is_torch_npu_available()
+except ImportError:
+    is_fp16_available = torch.cuda.is_available()
+    is_bf16_available = torch.cuda.is_bf16_supported()
+    is_npu_available = False
+
 from llmtuner.extras.logging import get_logger
 from llmtuner.hparams import (
     ModelArguments,
@@ -19,6 +29,17 @@ from llmtuner.hparams import (
 
 
 logger = get_logger(__name__)
+
+
+def _infer_dtype() -> torch.dtype:
+    if is_npu_available:
+        return torch.float16
+    elif is_bf16_available:
+        return torch.bfloat16
+    elif is_fp16_available:
+        return torch.float16
+    else:
+        return torch.float32
 
 
 def _parse_args(parser: HfArgumentParser, args: Optional[Dict[str, Any]] = None) -> Tuple[Any]:
@@ -197,15 +218,26 @@ def get_train_args(
 
     # postprocess model_args
     if training_args.bf16:
-        if not torch.cuda.is_bf16_supported():
+        if not is_bf16_available:
             raise ValueError("Current device does not support bf16 training.")
         model_args.compute_dtype = torch.bfloat16
     elif training_args.fp16:
         model_args.compute_dtype = torch.float16
     else:
-        model_args.compute_dtype = torch.float32
+        model_args.compute_dtype = _infer_dtype()
 
-    model_args.model_max_length = data_args.max_source_length + data_args.max_target_length
+    if model_args.layernorm_dtype == "bf16":
+        if not is_bf16_available:
+            raise ValueError("Current device does not support bf16 type.")
+        model_args.layernorm_dtype = torch.bfloat16
+    elif model_args.layernorm_dtype == "fp16":
+        model_args.layernorm_dtype = torch.float16
+    elif model_args.layernorm_dtype == "fp32":
+        model_args.layernorm_dtype = torch.float32
+    else:
+        model_args.layernorm_dtype = model_args.compute_dtype
+
+    model_args.model_max_length = data_args.cutoff_len
 
     # Log on each process the small summary:
     logger.info("Process rank: {}, device: {}, n_gpu: {}\n  distributed training: {}, compute dtype: {}".format(
@@ -242,5 +274,8 @@ def get_infer_args(
 
         if model_args.quantization_bit is not None and len(model_args.checkpoint_dir) != 1:
             raise ValueError("Quantized model only accepts a single checkpoint. Merge them first.")
+
+    # auto-detect cuda capability
+    model_args.compute_dtype = _infer_dtype()
 
     return model_args, data_args, finetuning_args, generating_args

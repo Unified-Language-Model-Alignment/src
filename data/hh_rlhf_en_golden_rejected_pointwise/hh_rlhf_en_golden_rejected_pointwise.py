@@ -3,17 +3,17 @@ import datasets
 from typing import Any, Dict, List
 
 
-_DESCRIPTION = "Anthropic Harmless dataset"
+_DESCRIPTION = "Harmless dataset re-written by GPT4"
 _CITATION = ""
-_HOMEPAGE = "https://huggingface.co/datasets/Anthropic/hh-rlhf"
+_HOMEPAGE = "https://huggingface.co/datasets/Unified-Language-Model-Alignment/Anthropic_HH_Golden"
 _LICENSE = "mit"
-_URL = "https://huggingface.co/datasets/Anthropic/hh-rlhf/resolve/main/"
+_URL = "https://huggingface.co/datasets/Unified-Language-Model-Alignment/Anthropic_HH_Golden/resolve/main/"
 _URLS = {
     "train": [
-        _URL + "harmless-base/train.jsonl.gz"
+        _URL + "hh_golden/train.jsonl"
     ],
     "test": [
-        _URL + "harmless-base/test.jsonl.gz"
+        _URL + "hh_golden/test.jsonl"
     ]
 }
 
@@ -25,8 +25,9 @@ class HhRlhfEn(datasets.GeneratorBasedBuilder):
     def _info(self) -> datasets.DatasetInfo:
         features = datasets.Features({
             "instruction": datasets.Value("string"),
-            "output": datasets.Sequence(datasets.Value("string")),
-            "history": datasets.Sequence(datasets.Sequence(datasets.Value("string")))
+            "output": datasets.Value("string"),
+            "history": datasets.Sequence(datasets.Sequence(datasets.Value("string"))),
+            "score": datasets.Value("float32")
         })
         return datasets.DatasetInfo(
             description=_DESCRIPTION,
@@ -85,7 +86,16 @@ class HhRlhfEn(datasets.GeneratorBasedBuilder):
 
                     yield key, {
                         "instruction": query,
-                        "output": [r_accept, r_reject],
-                        "history": history
+                        "output": r_accept,
+                        "history": history,
+                        "score": 1,
+                    }
+                    key += 1
+
+                    yield key, {
+                        "instruction": query,
+                        "output": r_reject,
+                        "history": history,
+                        "score": 0,
                     }
                     key += 1

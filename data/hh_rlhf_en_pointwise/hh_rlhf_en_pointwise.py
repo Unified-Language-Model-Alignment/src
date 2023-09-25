@@ -25,8 +25,9 @@ class HhRlhfEn(datasets.GeneratorBasedBuilder):
     def _info(self) -> datasets.DatasetInfo:
         features = datasets.Features({
             "instruction": datasets.Value("string"),
-            "output": datasets.Sequence(datasets.Value("string")),
-            "history": datasets.Sequence(datasets.Sequence(datasets.Value("string")))
+            "output": datasets.Value("string"),
+            "history": datasets.Sequence(datasets.Sequence(datasets.Value("string"))),
+            "score": datasets.Value("float32")
         })
         return datasets.DatasetInfo(
             description=_DESCRIPTION,
@@ -85,7 +86,16 @@ class HhRlhfEn(datasets.GeneratorBasedBuilder):
 
                     yield key, {
                         "instruction": query,
-                        "output": [r_accept, r_reject],
-                        "history": history
+                        "output": r_accept,
+                        "history": history,
+                        "score": 1,
+                    }
+                    key += 1
+
+                    yield key, {
+                        "instruction": query,
+                        "output": r_reject,
+                        "history": history,
+                        "score": 0,
                     }
                     key += 1

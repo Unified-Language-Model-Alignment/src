@@ -169,6 +169,54 @@
     },
     "ranking": true
   },
+  "hh_rlhf_en_sft": {
+    "script_url": "hh_rlhf_en_sft",
+    "columns": {
+      "prompt": "instruction",
+      "query": "",
+      "response": "output",
+      "history": "history"
+    }
+  },
+  "hh_rlhf_en_pointwise": {
+    "script_url": "hh_rlhf_en_pointwise",
+    "columns": {
+      "prompt": "instruction",
+      "query": "",
+      "response": "output",
+      "history": "history",
+      "score": "score"
+    }
+  },
+    "hh_rlhf_en_golden_rejected": {
+    "script_url": "hh_rlhf_en_golden_rejected",
+    "columns": {
+      "prompt": "instruction",
+      "query": "",
+      "response": "output",
+      "history": "history"
+    },
+    "ranking": true
+  },
+  "hh_rlhf_en_golden_rejected_sft": {
+    "script_url": "hh_rlhf_en_golden_rejected_sft",
+    "columns": {
+      "prompt": "instruction",
+      "query": "",
+      "response": "output",
+      "history": "history"
+    }
+  },
+  "hh_rlhf_en_golden_rejected_pointwise": {
+    "script_url": "hh_rlhf_en_golden_rejected_pointwise",
+    "columns": {
+      "prompt": "instruction",
+      "query": "",
+      "response": "output",
+      "history": "history",
+      "score": "score"
+    }
+  },
   "oaast_rm": {
     "file_name": "oaast_rm.json",
     "file_sha1": "622d420e9b70003b210618253bd3d9d2891d86cb",

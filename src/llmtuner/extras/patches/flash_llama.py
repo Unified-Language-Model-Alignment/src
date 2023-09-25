@@ -45,7 +45,7 @@ class LlamaRMSNorm(torch.nn.Module):
         hidden_states = hidden_states.to(torch.float32)
         variance = hidden_states.pow(2).mean(-1, keepdim=True)
         hidden_states = hidden_states * torch.rsqrt(variance + self.variance_epsilon)
-        return (self.weight * hidden_states).to(input_dtype) # for fp32 weight
+        return (self.weight * hidden_states).to(input_dtype)  # for fp32 weight
 
 
 class FlashRotaryEmbedding(torch.nn.Module):
@@ -64,7 +64,7 @@ class FlashRotaryEmbedding(torch.nn.Module):
         self.dim = dim
         self.base = float(base)
         self.pos_idx_in_fp32 = pos_idx_in_fp32
-        # Generate and save the inverse frequency buffer (non trainable)
+        # Generate and save the inverse frequency buffer (non_trainable)
         inv_freq = self._compute_inv_freq(device)
         self.register_buffer("inv_freq", inv_freq, persistent=False)
         self.interleaved = interleaved
@@ -129,10 +129,10 @@ class FlashRotaryEmbedding(torch.nn.Module):
         if self.scale is None:
             return apply_rotary_emb_func(
                 q, self._cos_cached[seqlen_offset:], self._sin_cached[seqlen_offset:],
-                self.interleaved, True # inplace=True
+                self.interleaved, True  # inplace=True
             ), apply_rotary_emb_func(
                 k, self._cos_cached[seqlen_offset:], self._sin_cached[seqlen_offset:],
-                self.interleaved, True # inplace=True
+                self.interleaved, True  # inplace=True
             )
         else:
             assert False

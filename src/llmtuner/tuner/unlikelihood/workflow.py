@@ -23,7 +23,8 @@ def run_unlikelihood(
     callbacks: Optional[List["TrainerCallback"]] = None
 ):
     dataset = get_dataset(model_args, data_args)
-    model, tokenizer = load_model_and_tokenizer(model_args, finetuning_args, training_args.do_train, stage="sft") # no value head needed when load model
+    # no value head needed when load model
+    model, tokenizer = load_model_and_tokenizer(model_args, finetuning_args, training_args.do_train, stage="sft")
     dataset = preprocess_dataset(dataset, tokenizer, data_args, training_args, stage="unlikelihood")
     data_collator = UnlikelihoodDataCollatorWithPadding(
         tokenizer=tokenizer,
@@ -31,7 +32,7 @@ def run_unlikelihood(
     )
 
     training_args_dict = training_args.to_dict()
-    training_args_dict.update(dict(remove_unused_columns=False)) # important for pairwise dataset
+    training_args_dict.update(dict(remove_unused_columns=False))  # important for pairwise dataset
     training_args = Seq2SeqTrainingArguments(**training_args_dict)
 
     # Initialize our Trainer

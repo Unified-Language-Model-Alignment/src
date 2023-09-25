@@ -99,7 +99,7 @@ class CustomPPOTrainer(PPOTrainer, Trainer):
 
             # Get inputs
             queries, responses = self.get_inputs(batch, generating_args)
-            self.tokenizer.padding_side = "right" # change padding side
+            self.tokenizer.padding_side = "right"  # change padding side
             rewards = self.get_rewards(queries, responses, unwrapped_model)
 
             # Cast to training mode
@@ -109,7 +109,7 @@ class CustomPPOTrainer(PPOTrainer, Trainer):
 
             # Run PPO step
             stats = self.step(queries, responses, rewards)
-            self.tokenizer.padding_side = "left" # restore padding side
+            self.tokenizer.padding_side = "left"  # restore padding side
             loss_meter.update(float(stats["ppo/loss/total"]), n=len(rewards))
             reward_meter.update(torch.stack(rewards).mean().item(), n=len(rewards))
 
@@ -138,7 +138,7 @@ class CustomPPOTrainer(PPOTrainer, Trainer):
                 loss_meter.reset()
                 reward_meter.reset()
 
-            if (step+1) % self.args.save_steps == 0: # save checkpoint
+            if (step+1) % self.args.save_steps == 0:  # save checkpoint
                 self.save_model(os.path.join(
                     self.args.output_dir, "{}-{}".format(PREFIX_CHECKPOINT_DIR, self.state.global_step)
                 ))
@@ -186,14 +186,14 @@ class CustomPPOTrainer(PPOTrainer, Trainer):
             response_index = (response[i] != self.tokenizer.pad_token_id).nonzero()
 
             if len(response_index) == 0:
-                response_length = 1 # allow empty response
+                response_length = 1  # allow empty response
             elif self.tokenizer.pad_token_id == self.tokenizer.eos_token_id:
-                response_length = response_index[-1] + 2 # save the EOS token
+                response_length = response_index[-1] + 2  # save the EOS token
             else:
                 response_length = response_index[-1] + 1
 
-            queries.append(query[i, query_length:]) # remove padding from left
-            responses.append(response[i, :response_length]) # remove padding from right
+            queries.append(query[i, query_length:])  # remove padding from left
+            responses.append(response[i, :response_length])  # remove padding from right
 
         return queries, responses
 
@@ -210,16 +210,16 @@ class CustomPPOTrainer(PPOTrainer, Trainer):
         replace_model(unwrapped_model, target="reward")
         batch = self.prepare_model_inputs(queries, responses)
 
-        with torch.cuda.amp.autocast(dtype=self.compute_dtype): # support bf16
+        with torch.cuda.amp.autocast(dtype=self.compute_dtype):  # support bf16
             _, _, values = self.model(**batch, output_hidden_states=True, return_dict=True)
 
-        if values.size(0) != batch["input_ids"].size(0): # adapt to chatglm2
+        if values.size(0) != batch["input_ids"].size(0):  # adapt to chatglm2
             values = torch.transpose(values, 0, 1)
 
         rewards = []
         for i in range(values.size(0)):
-            end_index = batch["attention_mask"][i].nonzero()[-1] # use the score on the EOS token
-            rewards.append(values[i, end_index].float().detach().cpu()) # use fp32 type
+            end_index = batch["attention_mask"][i].nonzero()[-1]  # use the score on the EOS token
+            rewards.append(values[i, end_index].float().detach().cpu())  # use fp32 type
 
         replace_model(unwrapped_model, target="default")
         return rewards
@@ -247,18 +247,18 @@ class CustomPPOTrainer(PPOTrainer, Trainer):
         all_values = []
 
         for i in range(math.ceil(bs / fbs)):
-            input_kwargs = {key: value[i * fbs : (i + 1) * fbs] for key, value in model_inputs.items()}
-            query_batch = queries[i * fbs : (i + 1) * fbs]
-            response_batch = responses[i * fbs : (i + 1) * fbs]
+            input_kwargs = {key: value[i * fbs: (i + 1) * fbs] for key, value in model_inputs.items()}
+            query_batch = queries[i * fbs: (i + 1) * fbs]
+            response_batch = responses[i * fbs: (i + 1) * fbs]
             if response_masks is not None:
-                response_masks_batch = response_masks[i * fbs : (i + 1) * fbs]
+                response_masks_batch = response_masks[i * fbs: (i + 1) * fbs]
             input_ids = input_kwargs["input_ids"]
             attention_mask = input_kwargs["attention_mask"]
 
-            with torch.cuda.amp.autocast(dtype=self.compute_dtype): # support bf16
+            with torch.cuda.amp.autocast(dtype=self.compute_dtype):  # support bf16
                 logits, _, values = model(**input_kwargs)
 
-            if values.size(0) != input_ids.size(0): # adapt to chatglm2
+            if values.size(0) != input_ids.size(0):  # adapt to chatglm2
                 values = torch.transpose(values, 0, 1)
 
             logprobs = logprobs_from_logits(logits[:, :-1, :], input_ids[:, 1:])
@@ -267,7 +267,7 @@ class CustomPPOTrainer(PPOTrainer, Trainer):
 
             for j in range(len(query_batch)):
                 start = len(query_batch[j]) - 1
-                if attention_mask[j, 0] == 0: # offset left padding
+                if attention_mask[j, 0] == 0:  # offset left padding
                     start += attention_mask[j, :].nonzero()[0]
                 end = start + len(response_batch[j])
 

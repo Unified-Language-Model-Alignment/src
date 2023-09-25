@@ -30,7 +30,7 @@ def run_ppo(
     model, tokenizer = load_model_and_tokenizer(model_args, finetuning_args, training_args.do_train, stage="ppo")
     dataset = preprocess_dataset(dataset, tokenizer, data_args, training_args, stage="ppo")
 
-    tokenizer.padding_side = "left" # use left-padding in generation while using right-padding in training
+    tokenizer.padding_side = "left"  # use left-padding in generation while using right-padding in training
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
     ppo_config = PPOConfig(
@@ -83,6 +83,6 @@ def run_ppo(
     if training_args.do_train:
         ppo_trainer.ppo_train()
         ppo_trainer.save_model()
-        ppo_trainer.save_state() # must be called after save_model to have a folder
+        ppo_trainer.save_state()  # must be called after save_model to have a folder
         if ppo_trainer.is_world_process_zero() and model_args.plot_loss:
             plot_loss(training_args.output_dir, keys=["loss", "reward"])

@@ -48,7 +48,7 @@ class BelleMultiturn(datasets.GeneratorBasedBuilder):
             )
         ]
 
-    def _generate_examples(self, filepath: str) -> Dict[int, Dict[str, Any]]: # generate multi-turn chat with history
+    def _generate_examples(self, filepath: str) -> Dict[int, Dict[str, Any]]:  # generate multi-turn chat with history
         with open(filepath, "r", encoding="utf-8") as f:
             for key, row in enumerate(f):
                 data = json.loads(row)

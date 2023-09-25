@@ -20,7 +20,7 @@ from trl import AutoModelForCausalLMWithValueHead
 
 try:
     from transformers.integrations import is_deepspeed_zero3_enabled
-except ImportError: # https://github.com/huggingface/transformers/releases/tag/v4.33.1
+except ImportError:  # https://github.com/huggingface/transformers/releases/tag/v4.33.1
     from transformers.deepspeed import is_deepspeed_zero3_enabled
 
 from llmtuner.extras.logging import reset_logging, get_logger
@@ -71,7 +71,7 @@ def load_model_and_tokenizer(
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.model_name_or_path,
         use_fast=model_args.use_fast_tokenizer,
-        padding_side="right", # training with left-padded tensors in fp16 precision may cause overflow
+        padding_side="right",  # training with left-padded tensors in fp16 precision may cause overflow
         **config_kwargs
     )
 
@@ -94,7 +94,7 @@ def load_model_and_tokenizer(
 
     # Set RoPE scaling
     if model_args.rope_scaling is not None:
-        if hasattr(config, "use_dynamic_ntk"): # for Qwen models
+        if hasattr(config, "use_dynamic_ntk"):  # for Qwen models
             if is_trainable:
                 logger.warning("Qwen model does not support RoPE scaling in training.")
             else:
@@ -102,7 +102,7 @@ def load_model_and_tokenizer(
                 setattr(config, "use_logn_attn", True)
                 logger.info("Using dynamic NTK scaling.")
 
-        elif hasattr(config, "rope_scaling"): # for LLaMA and Falcon models
+        elif hasattr(config, "rope_scaling"):  # for LLaMA and Falcon models
             require_version("transformers>=4.31.0", "RoPE scaling requires transformers>=4.31.0")
             if is_trainable:
                 if model_args.rope_scaling == "dynamic":
@@ -211,7 +211,7 @@ def load_model_and_tokenizer(
         model = AutoModelForCausalLMWithValueHead.from_pretrained(model)
         model._keys_to_ignore_on_save = None
         reset_logging()
-        if stage == "rm" and model_args.checkpoint_dir is not None: # load valuehead weights to evaluate reward model
+        if stage == "rm" and model_args.checkpoint_dir is not None:  # load valuehead weights to evaluate reward model
             logger.warning("Only the last checkpoint containing valuehead will be loaded.")
             if load_valuehead_params(model, model_args.checkpoint_dir[-1]):
                 model.v_head.load_state_dict({
@@ -219,7 +219,7 @@ def load_model_and_tokenizer(
                     "summary.bias": getattr(model, "reward_head_bias")
                 })
 
-        if stage == "ppo": # load reward model
+        if stage == "ppo":  # load reward model
             logger.info("Load reward model from {}".format(model_args.reward_model))
             if getattr(model, "is_peft_model", False):
                 model.pretrained_model.load_adapter(model_args.reward_model, "reward")
@@ -227,7 +227,7 @@ def load_model_and_tokenizer(
 
     # Prepare model for inference
     if not is_trainable:
-        model.requires_grad_(False) # fix all model params
+        model.requires_grad_(False)  # fix all model params
         model = model.to(model_args.compute_dtype) if model_args.quantization_bit is None else model
 
     trainable_params, all_param = count_parameters(model)

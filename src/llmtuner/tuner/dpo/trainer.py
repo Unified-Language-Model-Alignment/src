@@ -28,7 +28,7 @@ class CustomDPOTrainer(DPOTrainer):
 
         self.is_encoder_decoder = model.config.is_encoder_decoder
         self.ref_model = ref_model
-        self.use_dpo_data_collator = True # hack to avoid warning
+        self.use_dpo_data_collator = True  # hack to avoid warning
         self.label_pad_token_id = IGNORE_INDEX
         self.padding_value = 0
         self.beta = beta
@@ -50,7 +50,7 @@ class CustomDPOTrainer(DPOTrainer):
         model: Optional[torch.nn.Module] = None,
         batch: Optional[Dict[str, torch.Tensor]] = None
     ) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
-        batch_copied = BatchEncoding({k: v.detach().clone() for k, v in batch.items()}) # avoid error
+        batch_copied = BatchEncoding({k: v.detach().clone() for k, v in batch.items()})  # avoid error
 
         all_logits = model(
             input_ids=batch_copied["input_ids"],

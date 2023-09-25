@@ -57,7 +57,7 @@ def prepare_model_for_training(
             model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
 
         model.gradient_checkpointing_enable()
-        model.config.use_cache = False # turn off when gradient checkpointing is enabled
+        model.config.use_cache = False  # turn off when gradient checkpointing is enabled
 
     if finetuning_type != "full" and hasattr(model, output_layer_name):
         output_layer: torch.nn.Linear = getattr(model, output_layer_name)

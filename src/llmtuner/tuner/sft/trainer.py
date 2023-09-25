@@ -70,8 +70,8 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
         """
         pad_token_id = pad_token_id if pad_token_id is not None else self.tokenizer.pad_token_id
         padded_tensor = pad_token_id * torch.ones_like(tgt_tensor)
-        padded_tensor[:, -src_tensor.shape[-1]:] = src_tensor # adopt left-padding
-        return padded_tensor.contiguous() # in contiguous memory
+        padded_tensor[:, -src_tensor.shape[-1]:] = src_tensor  # adopt left-padding
+        return padded_tensor.contiguous()  # in contiguous memory
 
     def save_predictions(
         self,

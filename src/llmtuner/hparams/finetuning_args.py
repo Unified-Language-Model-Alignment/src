@@ -93,15 +93,15 @@ class FinetuningArguments:
     )
 
     def __post_init__(self):
-        if isinstance(self.lora_target, str): # support custom target modules/layers of LoRA
+        if isinstance(self.lora_target, str):  # support custom target modules/layers of LoRA
             self.lora_target = [target.strip() for target in self.lora_target.split(",")]
 
         if isinstance(self.additional_target, str):
             self.additional_target = [target.strip() for target in self.additional_target.split(",")]
 
-        if self.num_layer_trainable > 0: # fine-tuning the last n layers if num_layer_trainable > 0
+        if self.num_layer_trainable > 0:  # fine-tuning the last n layers if num_layer_trainable > 0
             trainable_layer_ids = [self.num_hidden_layers - k - 1 for k in range(self.num_layer_trainable)]
-        else: # fine-tuning the first n layers if num_layer_trainable < 0
+        else:  # fine-tuning the first n layers if num_layer_trainable < 0
             trainable_layer_ids = [k for k in range(-self.num_layer_trainable)]
 
         self.trainable_layers = ["{:d}.{}".format(idx, self.name_module_trainable) for idx in trainable_layer_ids]

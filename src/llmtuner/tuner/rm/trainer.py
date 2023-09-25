@@ -21,7 +21,7 @@ class PairwiseTrainer(Trainer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.can_return_loss = True # override property to return eval_loss
+        self.can_return_loss = True  # override property to return eval_loss
 
     def compute_loss(
         self,
@@ -39,7 +39,7 @@ class PairwiseTrainer(Trainer):
         """
         # Compute rewards
         _, _, values = model(**inputs, output_hidden_states=True, return_dict=True)
-        if values.size(0) != inputs["input_ids"].size(0): # adapt to chatglm2
+        if values.size(0) != inputs["input_ids"].size(0):  # adapt to chatglm2
             values = torch.transpose(values, 0, 1)
 
         # Split the inputs and rewards into two parts, chosen and rejected
@@ -69,7 +69,7 @@ class PairwiseTrainer(Trainer):
             assert div_index > 0
             chosen_trunc_rewards = chosen_rewards[i, div_index:end_index]
             rejected_trunc_rewards = rejected_rewards[i, div_index:end_index]
-            if return_outputs: # use the score on the EOS token for inference
+            if return_outputs:  # use the score on the EOS token for inference
                 chosen_scores.append(chosen_rewards[i, chosen_length-1])
                 rejected_scores.append(rejected_rewards[i, rejected_length-1])
             loss += -torch.nn.functional.logsigmoid(chosen_trunc_rewards - rejected_trunc_rewards).mean()

@@ -2,17 +2,13 @@
 
 import warnings
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from datasets import Dataset
-from transformers import DataCollator, PreTrainedModel, PreTrainedTokenizerBase, Trainer, TrainingArguments, BatchEncoding
-from transformers.trainer_callback import TrainerCallback
+from transformers import DataCollator, BatchEncoding
+from transformers import PreTrainedModel, PreTrainedTokenizerBase, Trainer, TrainingArguments
 
-from trl.import_utils import is_peft_available
-from trl.models import create_reference_model
 from trl.trainer.utils import disable_dropout_in_model, pad_to_length
 from torch.nn import CrossEntropyLoss
 import numpy as np
@@ -20,12 +16,9 @@ import numpy as np
 from llmtuner.extras.constants import IGNORE_INDEX
 
 
-if is_peft_available():
-    from peft import PeftModel, get_peft_model, prepare_model_for_kbit_training
-
-
 if TYPE_CHECKING:
     from transformers import PreTrainedModel
+
 
 class UnlikelihoodTrainer(Trainer):
     def __init__(
@@ -39,7 +32,7 @@ class UnlikelihoodTrainer(Trainer):
             disable_dropout_in_model(model)
 
         self.is_encoder_decoder = model.config.is_encoder_decoder
-        self.use_unlikelihood_data_collator = True # hack to avoid warning
+        self.use_unlikelihood_data_collator = True  # hack to avoid warning
         self.label_pad_token_id = IGNORE_INDEX
         self.padding_value = 0
         self.sft_loss_type = sft_loss_type
@@ -49,12 +42,12 @@ class UnlikelihoodTrainer(Trainer):
         if not hasattr(self, "accelerator"):
             raise AttributeError("Please update `transformers`.")
 
-
     def concatenated_inputs(self, batch: Dict[str, Union[List, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
         """Concatenate the chosen and rejected inputs into a single tensor.
 
         Args:
-            batch: A batch of data. Must contain the keys 'chosen_input_ids' and 'rejected_input_ids', which are tensors of shape (batch_size, sequence_length).
+            batch: A batch of data. Must contain the keys 'chosen_input_ids' and 'rejected_input_ids',
+                   which are tensors of shape (batch_size, sequence_length).
 
         Returns:
             A dictionary containing the concatenated inputs under the key 'concatenated_input_ids'.
@@ -85,28 +78,31 @@ class UnlikelihoodTrainer(Trainer):
         policy_logps: torch.FloatTensor,
         labels: torch.LongTensor,
         score: torch.FloatTensor
-    ) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
+    ) -> torch.FloatTensor:
         """Compute the Unlikelihood loss for a batch of policy and reference model log probabilities.
 
         Args:
+            model: The policy model used
+            policy_logits: Logits returned by the policy model
             policy_logps: Log probabilities of the policy model for the responses. Shape: (batch_size,)
             labels: The demonstration data. Shape: (batch_size,)
             score: Human preference score for the response. Shape: (batch_size,)
-            sft_loss: SFT loss for the response.
 
         Returns:
             A tuple of three tensors: (losses, rewards).
             The losses tensor contains the Unlikelihood loss for each example in the batch.
             The rewards tensors contain the rewards for the responses.
         """
-        logits = policy_logps
 
         if self.sft_loss_type == "shifted_ce_loss":
             # TODO: The SFT loss calculation needs to be made more general later.
             # From modeling_llama.py. The sft_loss only compute those are demonstration data.
             # Shift so that tokens < n predict n
             loss_fct = CrossEntropyLoss()
-            vocab_size = model.module.config.vocab_size if isinstance(model, (nn.DataParallel, nn.parallel.DistributedDataParallel)) else model.config.vocab_size
+            if isinstance(model, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
+                vocab_size = model.module.config.vocab_size
+            else:
+                vocab_size = model.config.vocab_size
 
             is_positive = (score == 1)
             shift_logits_positive = policy_logits[is_positive, :-1, :].contiguous()
@@ -128,7 +124,7 @@ class UnlikelihoodTrainer(Trainer):
             shift_labels_negative = shift_labels_negative.to(shift_logits_negative.device)
             negative_loss = (-1) * loss_fct(shift_logits_negative, shift_labels_negative)
 
-        elif self.sft_loss_type ==  "logloss":
+        elif self.sft_loss_type == "logloss":
             positive_loss = - policy_logps[score == 1].mean()
             negative_loss = policy_logps[score != 1].mean()
 
@@ -150,11 +146,14 @@ class UnlikelihoodTrainer(Trainer):
 
         Args:
             logits: Logits of the model (unnormalized). Shape: (batch_size, sequence_length, vocab_size)
-            labels: Labels for which to compute the log probabilities. Label tokens with a value of label_pad_token_id are ignored. Shape: (batch_size, sequence_length)
-            average_log_prob: If True, return the average log probability per (non-masked) token. Otherwise, return the sum of the log probabilities of the (non-masked) tokens.
+            labels: Labels for which to compute the log probabilities.
+                    Label tokens with a value of label_pad_token_id are ignored. Shape: (batch_size, sequence_length)
+            average_log_prob: If True, return the average log probability per (non-masked) token.
+                    Otherwise, return the sum of the log probabilities of the (non-masked) tokens.
 
         Returns:
-            A tensor of shape (batch_size,) containing the average/sum log probabilities of the given labels under the given logits.
+            A tensor of shape (batch_size,) containing the average/sum log probabilities of the given labels
+                     under the given logits.
         """
         if logits.shape[:-1] != labels.shape:
             raise ValueError("Logits (batch and sequence length dim) and labels must have the same shape.")
@@ -170,19 +169,18 @@ class UnlikelihoodTrainer(Trainer):
         per_token_logps = torch.gather(logits.log_softmax(-1), dim=2, index=labels.unsqueeze(2)).squeeze(2)
 
         if average_log_prob:
-            return (per_token_logps * loss_mask).sum(-1) / loss_mask.sum(-1)
+            return (per_token_logps * loss_mask).sum(-1) / torch.sum(loss_mask, -1)
         else:
             return (per_token_logps * loss_mask).sum(-1)
 
     def concatenated_forward(
         self, model: torch.nn.Module, batch: Dict[str, torch.Tensor]
-    ) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
+    ) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
         """Run the given model on the given batch of inputs, concatenating the chosen and rejected inputs together.
 
         We do this to avoid doing two forward passes, because it's faster for FSDP.
         """
-        batch_copied = BatchEncoding({k: v.detach().clone() for k, v in batch.items()}) # avoid error
-
+        batch_copied = BatchEncoding({k: v.detach().clone() for k, v in batch.items()})  # avoid error
 
         logits = model(
             input_ids=batch_copied["input_ids"],
@@ -226,7 +224,6 @@ class UnlikelihoodTrainer(Trainer):
             metrics[f"{prefix}logps/negative"] = np.nanmean(logps_negative.detach().cpu().numpy())
             metrics[f"{prefix}logits/positive"] = np.nanmean(logits_positive.detach().cpu().numpy())
             metrics[f"{prefix}logits/negative"] = np.nanmean(logits_negative.detach().cpu().numpy())
-            
 
             metrics[f"{prefix}score"] = batch["score"].detach().cpu().numpy().mean()
 
@@ -240,8 +237,11 @@ class UnlikelihoodTrainer(Trainer):
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, Dict[str, torch.Tensor]]]:
         if not self.use_unlikelihood_data_collator:
             warnings.warn(
-                "compute_loss is only implemented for UnlikelihoodDataCollatorWithPadding, and you passed a datacollator that is different than "
-                "UnlikelihoodDataCollatorWithPadding - you might see unexpected behavior. Alternatively, you can implement your own prediction_step method if you are using a custom data collator"
+                "compute_loss is only implemented for UnlikelihoodDataCollatorWithPadding, "
+                "and you passed a datacollator that is different than "
+                "UnlikelihoodDataCollatorWithPadding - you might see unexpected behavior. "
+                "Alternatively, you can implement your own prediction_step method "
+                "if you are using a custom data collator"
             )
         loss, metrics = self.get_batch_metrics(model, inputs, train_eval="train")
 
@@ -250,7 +250,7 @@ class UnlikelihoodTrainer(Trainer):
             self.store_metrics(metrics, train_eval="train")
 
         if return_outputs:
-            return (loss, metrics)
+            return loss, metrics
         return loss
 
     def get_batch_samples(self, model, batch: Dict[str, torch.LongTensor]) -> Tuple[str, str]:
@@ -278,8 +278,11 @@ class UnlikelihoodTrainer(Trainer):
     ):
         if not self.use_unlikelihood_data_collator:
             warnings.warn(
-                "prediction_step is only implemented for UnlikelihoodDataCollatorWithPadding, and you passed a datacollator that is different than "
-                "UnlikelihoodDataCollatorWithPadding - you might see unexpected behavior. Alternatively, you can implement your own prediction_step method if you are using a custom data collator"
+                "prediction_step is only implemented for UnlikelihoodDataCollatorWithPadding, "
+                "and you passed a datacollator that is different than "
+                "UnlikelihoodDataCollatorWithPadding - you might see unexpected behavior. "
+                "Alternatively, you can implement your own prediction_step method "
+                "if you are using a custom data collator"
             )
         if ignore_keys is None:
             if hasattr(model, "config"):
@@ -295,7 +298,7 @@ class UnlikelihoodTrainer(Trainer):
             self.store_metrics(metrics, train_eval="eval")
 
         if prediction_loss_only:
-            return (loss.detach(), None, None)
+            return loss.detach(), None, None
 
         # logits for the chosen and rejected samples from model
         logits_dict = {
@@ -306,7 +309,7 @@ class UnlikelihoodTrainer(Trainer):
         logits = torch.stack(logits).mean(axis=1)
         labels = torch.zeros(logits.shape[0])
 
-        return (loss.detach(), logits, labels)
+        return loss.detach(), logits, labels
 
     def store_metrics(self, metrics: Dict[str, float], train_eval: Literal["train", "eval"] = "train") -> None:
         for key, value in metrics.items():

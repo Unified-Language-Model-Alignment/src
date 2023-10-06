@@ -54,17 +54,15 @@ class HhRlhfEn(datasets.GeneratorBasedBuilder):
             )
         ]
 
-    def _generate_examples(self, filepaths: List[str]) -> Dict[int, Dict[str, Any]]: # generate multi-turn chat for ChatGLM
+    # generate multi-turn chat for ChatGLM
+    def _generate_examples(self, filepaths: List[str]) -> Dict[int, Dict[str, Any]]:
         key = 0
         for filepath in filepaths:
             with open(filepath, "r", encoding="utf-8") as f:
                 for row in f:
                     data = json.loads(row)
                     chosen = data["chosen"]
-                    rejected = data["rejected"]
 
-                    assist_idx = rejected.rfind("\n\nAssistant: ")
-                    r_reject = rejected[assist_idx+13:].strip()
                     assist_idx = chosen.rfind("\n\nAssistant: ")
                     r_accept = chosen[assist_idx+13:].strip()
 

@@ -2,17 +2,14 @@
 
 import warnings
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from datasets import Dataset
-from transformers import DataCollator, PreTrainedModel, PreTrainedTokenizerBase, Trainer, TrainingArguments, BatchEncoding
-from transformers.trainer_callback import TrainerCallback
+from transformers import DataCollator,  BatchEncoding
+from transformers import PreTrainedModel, PreTrainedTokenizerBase, Trainer, TrainingArguments
 
-from trl.import_utils import is_peft_available
-from trl.models import create_reference_model
 from trl.trainer.utils import disable_dropout_in_model, pad_to_length
 from torch.nn import CrossEntropyLoss
 import numpy as np
@@ -20,12 +17,9 @@ import numpy as np
 from llmtuner.extras.constants import IGNORE_INDEX
 
 
-if is_peft_available():
-    from peft import PeftModel, get_peft_model, prepare_model_for_kbit_training
-
-
 if TYPE_CHECKING:
     from transformers import PreTrainedModel
+
 
 class ULMATrainer(Trainer):
     def __init__(
@@ -46,7 +40,7 @@ class ULMATrainer(Trainer):
 
         self.is_encoder_decoder = model.config.is_encoder_decoder
         self.ref_model = ref_model
-        self.use_ulma_data_collator = True # hack to avoid warning
+        self.use_ulma_data_collator = True  # hack to avoid warning
         self.label_pad_token_id = IGNORE_INDEX
         self.padding_value = 0
         self.beta = beta
@@ -70,7 +64,8 @@ class ULMATrainer(Trainer):
         """Concatenate the chosen and rejected inputs into a single tensor.
 
         Args:
-            batch: A batch of data. Must contain the keys 'chosen_input_ids' and 'rejected_input_ids', which are tensors of shape (batch_size, sequence_length).
+            batch: A batch of data. Must contain the keys 'chosen_input_ids' and 'rejected_input_ids',
+            which are tensors of shape (batch_size, sequence_length).
 
         Returns:
             A dictionary containing the concatenated inputs under the key 'concatenated_input_ids'.
@@ -102,7 +97,7 @@ class ULMATrainer(Trainer):
         reference_logps: torch.FloatTensor,
         labels: torch.LongTensor,
         score: torch.FloatTensor
-    ) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
+    ) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
         """Compute the ULMA loss for a batch of policy and reference model log probabilities.
 
         Args:
@@ -132,12 +127,16 @@ class ULMATrainer(Trainer):
             shift_labels = labels[is_demonstration, 1:].contiguous()
             # Flatten the tokens
             loss_fct = CrossEntropyLoss()
-            shift_logits = shift_logits.view(-1, model.module.config.vocab_size if isinstance(model, (nn.DataParallel, nn.parallel.DistributedDataParallel)) else model.config.vocab_size)
+            if isinstance(model, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
+                vocab_size = model.module.config.vocab_size
+            else:
+                vocab_size = model.config.vocab_size
+            shift_logits = shift_logits.view(-1, vocab_size)
             shift_labels = shift_labels.view(-1)
             # Enable model parallelism
             shift_labels = shift_labels.to(shift_logits.device)
             sft_loss = loss_fct(shift_logits, shift_labels)
-        elif self.sft_loss_type ==  "logloss":
+        elif self.sft_loss_type == "logloss":
             sft_loss = - policy_logps[score == 1].mean()
         elif self.sft_loss_type == "beta_logloss":
             sft_loss = - self.beta * policy_logps[score == 1].mean()
@@ -163,11 +162,14 @@ class ULMATrainer(Trainer):
 
         Args:
             logits: Logits of the model (unnormalized). Shape: (batch_size, sequence_length, vocab_size)
-            labels: Labels for which to compute the log probabilities. Label tokens with a value of label_pad_token_id are ignored. Shape: (batch_size, sequence_length)
-            average_log_prob: If True, return the average log probability per (non-masked) token. Otherwise, return the sum of the log probabilities of the (non-masked) tokens.
+            labels: Labels for which to compute the log probabilities.
+                    Label tokens with a value of label_pad_token_id are ignored. Shape: (batch_size, sequence_length)
+            average_log_prob: If True, return the average log probability per (non-masked) token.
+                    Otherwise, return the sum of the log probabilities of the (non-masked) tokens.
 
         Returns:
-            A tensor of shape (batch_size,) containing the average/sum log probabilities of the given labels under the given logits.
+            A tensor of shape (batch_size,) containing the average/sum log probabilities of the given labels
+                    under the given logits.
         """
         if logits.shape[:-1] != labels.shape:
             raise ValueError("Logits (batch and sequence length dim) and labels must have the same shape.")
@@ -175,7 +177,7 @@ class ULMATrainer(Trainer):
         if not self.is_encoder_decoder:
             labels = labels[:, 1:].clone()
             logits = logits[:, :-1, :]
-        loss_mask = labels != self.label_pad_token_id
+        loss_mask = (labels != self.label_pad_token_id)
 
         # dummy token; we'll ignore the losses on these tokens later
         labels[labels == self.label_pad_token_id] = 0
@@ -183,19 +185,18 @@ class ULMATrainer(Trainer):
         per_token_logps = torch.gather(logits.log_softmax(-1), dim=2, index=labels.unsqueeze(2)).squeeze(2)
 
         if average_log_prob:
-            return (per_token_logps * loss_mask).sum(-1) / loss_mask.sum(-1)
+            return (per_token_logps * loss_mask).sum(-1) / torch.sum(loss_mask, -1)
         else:
             return (per_token_logps * loss_mask).sum(-1)
 
     def concatenated_forward(
         self, model: torch.nn.Module, batch: Dict[str, torch.Tensor]
-    ) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
+    ) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
         """Run the given model on the given batch of inputs, concatenating the chosen and rejected inputs together.
 
         We do this to avoid doing two forward passes, because it's faster for FSDP.
         """
-        batch_copied = BatchEncoding({k: v.detach().clone() for k, v in batch.items()}) # avoid error
-
+        batch_copied = BatchEncoding({k: v.detach().clone() for k, v in batch.items()})  # avoid error
 
         logits = model(
             input_ids=batch_copied["input_ids"],
@@ -228,7 +229,14 @@ class ULMATrainer(Trainer):
             else:
                 (reference_logps, _) = self.concatenated_forward(self.ref_model, batch)
 
-        losses, rewards = self.ulma_loss(model, policy_logits, policy_logps, reference_logps, batch["labels"], batch["score"])
+        losses, rewards = self.ulma_loss(
+            model,
+            policy_logits,
+            policy_logps,
+            reference_logps,
+            batch["labels"],
+            batch["score"]
+        )
 
         rewards_positive = rewards[batch["score"] == 1]
         rewards_negative = rewards[batch["score"] != 1]
@@ -251,7 +259,6 @@ class ULMATrainer(Trainer):
             metrics[f"{prefix}logps/negative"] = np.nanmean(logps_negative.detach().cpu().numpy())
             metrics[f"{prefix}logits/positive"] = np.nanmean(logits_positive.detach().cpu().numpy())
             metrics[f"{prefix}logits/negative"] = np.nanmean(logits_negative.detach().cpu().numpy())
-            
 
             metrics[f"{prefix}score"] = batch["score"].detach().cpu().numpy().mean()
 
@@ -265,8 +272,11 @@ class ULMATrainer(Trainer):
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, Dict[str, torch.Tensor]]]:
         if not self.use_ulma_data_collator:
             warnings.warn(
-                "compute_loss is only implemented for ULMADataCollatorWithPadding, and you passed a datacollator that is different than "
-                "ULMADataCollatorWithPadding - you might see unexpected behavior. Alternatively, you can implement your own prediction_step method if you are using a custom data collator"
+                "compute_loss is only implemented for ULMADataCollatorWithPadding, "
+                "and you passed a datacollator that is different than "
+                "ULMADataCollatorWithPadding - you might see unexpected behavior. "
+                "Alternatively, you can implement your own prediction_step method "
+                "if you are using a custom data collator"
             )
         loss, metrics = self.get_batch_metrics(model, inputs, train_eval="train")
 
@@ -275,7 +285,7 @@ class ULMATrainer(Trainer):
             self.store_metrics(metrics, train_eval="train")
 
         if return_outputs:
-            return (loss, metrics)
+            return loss, metrics
         return loss
 
     def get_batch_samples(self, model, batch: Dict[str, torch.LongTensor]) -> Tuple[str, str]:
@@ -324,8 +334,11 @@ class ULMATrainer(Trainer):
     ):
         if not self.use_ulma_data_collator:
             warnings.warn(
-                "prediction_step is only implemented for ULMADataCollatorWithPadding, and you passed a datacollator that is different than "
-                "ULMADataCollatorWithPadding - you might see unexpected behavior. Alternatively, you can implement your own prediction_step method if you are using a custom data collator"
+                "prediction_step is only implemented for ULMADataCollatorWithPadding, "
+                "and you passed a datacollator that is different than "
+                "ULMADataCollatorWithPadding - you might see unexpected behavior. "
+                "Alternatively, you can implement your own prediction_step method "
+                "if you are using a custom data collator"
             )
         if ignore_keys is None:
             if hasattr(model, "config"):
@@ -341,7 +354,7 @@ class ULMATrainer(Trainer):
             self.store_metrics(metrics, train_eval="eval")
 
         if prediction_loss_only:
-            return (loss.detach(), None, None)
+            return loss.detach(), None, None
 
         # logits for the chosen and rejected samples from model
         logits_dict = {
@@ -352,7 +365,7 @@ class ULMATrainer(Trainer):
         logits = torch.stack(logits).mean(axis=1)
         labels = torch.zeros(logits.shape[0])
 
-        return (loss.detach(), logits, labels)
+        return loss.detach(), logits, labels
 
     def store_metrics(self, metrics: Dict[str, float], train_eval: Literal["train", "eval"] = "train") -> None:
         for key, value in metrics.items():

@@ -24,7 +24,7 @@ from llmtuner.api.protocol import (
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI): # collects GPU memory
+async def lifespan(app: FastAPI):  # collects GPU memory
     yield
     torch_gc()
 

@@ -66,7 +66,7 @@ class Template:
         r"""
         Aligns inputs to the standard format.
         """
-        system = system or self.system # use system if provided
+        system = system or self.system  # use system if provided
         history = history if (history and self.use_history) else []
         history = history + [(query, resp)]
         return system, history
@@ -77,13 +77,13 @@ class Template:
     ) -> Tuple[List[int], List[int]]:
         if tokenizer.bos_token_id is not None and getattr(tokenizer, "add_bos_token", True):
             bos_ids = [tokenizer.bos_token_id]
-        else: # baichuan, qwen and gpt2 models have no bos token
+        else:  # baichuan, qwen and gpt2 models have no bos token
             bos_ids = []
 
         if tokenizer.eos_token_id is None:
             raise ValueError("EOS token is required.")
 
-        if self.efficient_eos: # used in baichuan, qwen, chatglm, etc.
+        if self.efficient_eos:  # used in baichuan, qwen, chatglm, etc.
             eos_ids = []
         else:
             eos_ids = [tokenizer.eos_token_id]
@@ -107,7 +107,7 @@ class Template:
         for turn_idx, (query, resp) in enumerate(history):
             if turn_idx == 0:
                 prefix_ids = self._convert_inputs_to_ids(tokenizer, context=self.prefix, system=system)
-                if len(prefix_ids) != 0: # has prefix
+                if len(prefix_ids) != 0:  # has prefix
                     prefix_ids = bos_ids + prefix_ids + sep_ids
                 else:
                     prefix_ids = bos_ids
@@ -130,7 +130,7 @@ class Template:
         r"""
         Converts context to token ids.
         """
-        if isinstance(getattr(tokenizer, "tokenizer", None), tiktoken.Encoding): # for tiktoken tokenizer (Qwen)
+        if isinstance(getattr(tokenizer, "tokenizer", None), tiktoken.Encoding):  # for tiktoken tokenizer (Qwen)
             kwargs = dict(allowed_special="all")
         else:
             kwargs = dict(add_special_tokens=False)
@@ -169,7 +169,7 @@ class Llama2Template(Template):
         bos_ids, eos_ids = self._get_special_ids(tokenizer)
         encoded_pairs = []
         for turn_idx, (query, resp) in enumerate(history):
-            if turn_idx == 0: # llama2 template has no sep_ids
+            if turn_idx == 0:  # llama2 template has no sep_ids
                 query = self.prefix[0].replace("{{system}}", system) + query
             query_ids = self._convert_inputs_to_ids(tokenizer, context=self.prompt, query=query)
             resp_ids = self._convert_inputs_to_ids(tokenizer, context=[resp])
@@ -478,7 +478,7 @@ register_template(
         "{{system}}"
     ],
     prompt=[
-        {"token": "<reserved_102>"}, # user token
+        {"token": "<reserved_102>"},  # user token
         "{{query}}",
         {"token": "<reserved_103>"}  # assistant token
     ],
@@ -498,7 +498,7 @@ register_template(
         "{{system}}"
     ],
     prompt=[
-        {"token": "<reserved_106>"}, # user token
+        {"token": "<reserved_106>"},  # user token
         "{{query}}",
         {"token": "<reserved_107>"}  # assistant token
     ],

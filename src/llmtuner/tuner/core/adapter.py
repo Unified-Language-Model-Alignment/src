@@ -46,9 +46,9 @@ def init_adapter(
     if finetuning_args.finetuning_type == "freeze":
         logger.info("Fine-tuning method: Freeze")
         num_layers = getattr(model.config, "num_layers")
-        if finetuning_args.num_layer_trainable > 0: # fine-tuning the last n layers if num_layer_trainable > 0
+        if finetuning_args.num_layer_trainable > 0:  # fine-tuning the last n layers if num_layer_trainable > 0
             trainable_layer_ids = [num_layers - k - 1 for k in range(finetuning_args.num_layer_trainable)]
-        else: # fine-tuning the first n layers if num_layer_trainable < 0
+        else:  # fine-tuning the first n layers if num_layer_trainable < 0
             trainable_layer_ids = [k for k in range(-finetuning_args.num_layer_trainable)]
 
         trainable_layers = ["{:d}.{}".format(idx, finetuning_args.name_module_trainable) for idx in trainable_layer_ids]
@@ -68,7 +68,7 @@ def init_adapter(
             assert os.path.exists(os.path.join(model_args.checkpoint_dir[0], CONFIG_NAME)), \
                 "The given checkpoint may be not a LoRA checkpoint, please specify `--finetuning_type full/freeze` instead."
 
-            if (is_trainable and finetuning_args.resume_lora_training) or (not is_mergeable): # continually fine-tuning
+            if (is_trainable and finetuning_args.resume_lora_training) or (not is_mergeable):  # continually fine-tuning
                 checkpoints_to_merge, latest_checkpoint = model_args.checkpoint_dir[:-1], model_args.checkpoint_dir[-1]
             else:
                 checkpoints_to_merge = model_args.checkpoint_dir
@@ -80,10 +80,10 @@ def init_adapter(
             if len(checkpoints_to_merge) > 0:
                 logger.info("Merged {} model checkpoint(s).".format(len(checkpoints_to_merge)))
 
-            if latest_checkpoint is not None: # resume lora training or quantized inference
+            if latest_checkpoint is not None:  # resume lora training or quantized inference
                 model = PeftModel.from_pretrained(model, latest_checkpoint, is_trainable=is_trainable)
 
-        if is_trainable and latest_checkpoint is None: # create new lora weights while training
+        if is_trainable and latest_checkpoint is None:  # create new lora weights while training
             if len(finetuning_args.lora_target) == 1 and finetuning_args.lora_target[0] == "all":
                 target_modules = find_all_linear_modules(model, model_args.quantization_bit)
             else:
@@ -99,7 +99,7 @@ def init_adapter(
                 modules_to_save=finetuning_args.additional_target
             )
             model = get_peft_model(model, lora_config)
-            if id(model.peft_config) != id(model.base_model.peft_config): # https://github.com/huggingface/peft/issues/923
+            if id(model.peft_config) != id(model.base_model.peft_config):  # https://github.com/huggingface/peft/issues/923
                 model.base_model.peft_config = model.peft_config
 
     if model_args.checkpoint_dir is not None:

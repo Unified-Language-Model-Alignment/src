@@ -30,7 +30,7 @@ def run_rm(
     data_collator = PairwiseDataCollatorWithPadding(tokenizer)
 
     training_args_dict = training_args.to_dict()
-    training_args_dict.update(dict(remove_unused_columns=False)) # important for pairwise dataset
+    training_args_dict.update(dict(remove_unused_columns=False))  # important for pairwise dataset
     training_args = Seq2SeqTrainingArguments(**training_args_dict)
 
     # Initialize our Trainer

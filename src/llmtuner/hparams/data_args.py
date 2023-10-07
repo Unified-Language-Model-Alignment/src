@@ -104,7 +104,7 @@ class DataArguments:
         metadata={"help": "Packing the questions and answers in the supervised fine-tuning stage."}
     )
 
-    def init_for_training(self): # support mixing multiple datasets
+    def init_for_training(self):  # support mixing multiple datasets
         dataset_names = [ds.strip() for ds in self.dataset.split(",")]
         with open(os.path.join(self.dataset_dir, "dataset_info.json"), "r") as f:
             dataset_info = json.load(f)

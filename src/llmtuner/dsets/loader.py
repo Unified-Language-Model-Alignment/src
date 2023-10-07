@@ -19,7 +19,7 @@ def get_dataset(
     data_args: "DataArguments"
 ) -> Union["Dataset", "IterableDataset"]:
     max_samples = data_args.max_samples
-    all_datasets: List[Union["Dataset", "IterableDataset"]] = [] # support multiple datasets
+    all_datasets: List[Union["Dataset", "IterableDataset"]] = []  # support multiple datasets
 
     for dataset_attr in data_args.dataset_list:
         logger.info("Loading dataset {}...".format(dataset_attr))
@@ -34,14 +34,14 @@ def get_dataset(
             data_path = None
             data_files: List[str] = []
 
-            if os.path.isdir(os.path.join(data_args.dataset_dir, dataset_attr.dataset_name)): # directory
+            if os.path.isdir(os.path.join(data_args.dataset_dir, dataset_attr.dataset_name)):  # directory
                 for file_name in os.listdir(os.path.join(data_args.dataset_dir, dataset_attr.dataset_name)):
                     data_files.append(os.path.join(data_args.dataset_dir, dataset_attr.dataset_name, file_name))
                     if data_path is None:
                         data_path = EXT2TYPE.get(file_name.split(".")[-1], None)
                     else:
                         assert data_path == EXT2TYPE.get(file_name.split(".")[-1], None), "file type does not match."
-            elif os.path.isfile(os.path.join(data_args.dataset_dir, dataset_attr.dataset_name)): # single file
+            elif os.path.isfile(os.path.join(data_args.dataset_dir, dataset_attr.dataset_name)):  # single file
                 data_files.append(os.path.join(data_args.dataset_dir, dataset_attr.dataset_name))
                 data_path = EXT2TYPE.get(dataset_attr.dataset_name.split(".")[-1], None)
             else:
@@ -65,11 +65,11 @@ def get_dataset(
             max_samples_temp = min(len(dataset), max_samples)
             dataset = dataset.select(range(max_samples_temp))
 
-        for column_name in ["prompt", "query", "response", "history", "score"]: # align datasets
+        for column_name in ["prompt", "query", "response", "history", "score"]:  # align datasets
             if getattr(dataset_attr, column_name) and getattr(dataset_attr, column_name) != column_name:
                 dataset = dataset.rename_column(getattr(dataset_attr, column_name), column_name)
 
-        if dataset_attr.system_prompt: # add system prompt
+        if dataset_attr.system_prompt:  # add system prompt
             if data_args.streaming:
                 dataset = dataset.map(lambda _: {"system": dataset_attr.system_prompt})
             else:

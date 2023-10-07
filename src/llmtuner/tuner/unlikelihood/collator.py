@@ -22,7 +22,7 @@ class UnlikelihoodDataCollatorWithPadding(DataCollatorForSeq2Seq):
             padded_tensor = self.label_pad_token_id * torch.ones_like(feature)
             padded_tensor[start:end] = feature[start:end]
             padded_labels.append(padded_tensor)
-        return torch.stack(padded_labels, dim=0).contiguous() # in contiguous memory
+        return torch.stack(padded_labels, dim=0).contiguous()  # in contiguous memory
 
     def __call__(self, features: Sequence[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
         r"""

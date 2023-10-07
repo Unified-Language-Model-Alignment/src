@@ -87,12 +87,12 @@ class ModelArguments:
         self.compute_dtype = None
         self.model_max_length = None
 
-        if self.checkpoint_dir is not None: # support merging multiple lora weights
+        if self.checkpoint_dir is not None:  # support merging multiple lora weights
             self.checkpoint_dir = [cd.strip() for cd in self.checkpoint_dir.split(",")]
 
         if self.quantization_bit is not None:
             assert self.quantization_bit in [4, 8], "We only accept 4-bit or 8-bit quantization."
 
         if self.use_auth_token == True and self.hf_auth_token is not None:
-            from huggingface_hub.hf_api import HfFolder # lazy load
+            from huggingface_hub.hf_api import HfFolder  # lazy load
             HfFolder.save_token(self.hf_auth_token)

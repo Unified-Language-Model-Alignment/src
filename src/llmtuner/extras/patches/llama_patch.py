@@ -6,8 +6,8 @@ from transformers.utils import logging
 from transformers.models.llama.modeling_llama import LlamaAttention, apply_rotary_pos_emb, repeat_kv
 
 try:
-    from flash_attn import flash_attn_func, flash_attn_varlen_func # type: ignore
-    from flash_attn.bert_padding import pad_input, unpad_input # type: ignore
+    from flash_attn import flash_attn_func, flash_attn_varlen_func  # type: ignore
+    from flash_attn.bert_padding import pad_input, unpad_input  # type: ignore
 except ImportError:
     print("FlashAttention-2 is not installed, ignore this if you are not using FlashAttention.")
 
@@ -45,7 +45,7 @@ class LlamaShiftShortAttention(LlamaAttention):
         cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
 
-        if past_key_value is not None: # reuse k, v, self_attention
+        if past_key_value is not None:  # reuse k, v, self_attention
             key_states = torch.cat([past_key_value[0], key_states], dim=2)
             value_states = torch.cat([past_key_value[1], value_states], dim=2)
 
@@ -55,13 +55,13 @@ class LlamaShiftShortAttention(LlamaAttention):
             key_states = repeat_kv(key_states, self.num_key_value_groups)
             value_states = repeat_kv(value_states, self.num_key_value_groups)
 
-        if getattr(self, "shift_ratio", None) and self.training: # shift
+        if getattr(self, "shift_ratio", None) and self.training:  # shift
             group_size = int(q_len * getattr(self, "shift_ratio"))
             if q_len % group_size > 0:
                 raise ValueError("q_len {} should be divisible by group size {}.".format(q_len, group_size))
             num_group = q_len // group_size
             for state in (query_states, key_states, value_states):
-                state = state.transpose(1, 2) # output: (bsz, seq_len, n_heads, head_dim)
+                state = state.transpose(1, 2)  # output: (bsz, seq_len, n_heads, head_dim)
                 state[:, :, self.num_heads//2:] = state[:, :, self.num_heads//2:].roll(-group_size//2, dims=1)
                 state = state.reshape(bsz * num_group, group_size, self.num_heads, self.head_dim).transpose(1, 2)
 
@@ -92,7 +92,7 @@ class LlamaShiftShortAttention(LlamaAttention):
 
         attn_output = attn_output.transpose(1, 2).contiguous()
 
-        if getattr(self, "shift_ratio", None) and self.training: # shift back
+        if getattr(self, "shift_ratio", None) and self.training:  # shift back
             attn_output.reshape(bsz, q_len, self.num_heads, self.head_dim)
             attn_output[:, :, self.num_heads//2:] = attn_output[:, :, self.num_heads//2:].roll(group_size//2, dims=1)
 
@@ -138,7 +138,7 @@ class LlamaFlashAttention2(LlamaAttention):
         cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
 
-        if past_key_value is not None: # reuse k, v, self_attention
+        if past_key_value is not None:  # reuse k, v, self_attention
             key_states = torch.cat([past_key_value[0], key_states], dim=2)
             value_states = torch.cat([past_key_value[1], value_states], dim=2)
 
@@ -156,11 +156,11 @@ class LlamaFlashAttention2(LlamaAttention):
             key_states = repeat_kv(key_states, self.num_key_value_groups)
             value_states = repeat_kv(value_states, self.num_key_value_groups)
 
-        query_states = query_states.transpose(1, 2) # (bsz, seq_len, n_heads, head_dim)
-        key_states = key_states.transpose(1, 2) # (bsz, seq_len, n_heads, head_dim)
-        value_states = value_states.transpose(1, 2) # (bsz, seq_len, n_heads, head_dim)
+        query_states = query_states.transpose(1, 2)  # (bsz, seq_len, n_heads, head_dim)
+        key_states = key_states.transpose(1, 2)  # (bsz, seq_len, n_heads, head_dim)
+        value_states = value_states.transpose(1, 2)  # (bsz, seq_len, n_heads, head_dim)
 
-        if getattr(self, "shift_ratio", None) and self.training: # shift
+        if getattr(self, "shift_ratio", None) and self.training:  # shift
             group_size = int(q_len * getattr(self, "shift_ratio"))
             if q_len % group_size > 0:
                 raise ValueError("q_len {} should be divisible by group size {}.".format(q_len, group_size))
@@ -194,7 +194,7 @@ class LlamaFlashAttention2(LlamaAttention):
                 query_states, key_states, value_states, 0.0, softmax_scale=None, causal=True
             )
 
-        if getattr(self, "shift_ratio", None) and self.training: # shift back
+        if getattr(self, "shift_ratio", None) and self.training:  # shift back
             attn_output.reshape(bsz, q_len, self.num_heads, self.head_dim)
             attn_output[:, :, self.num_heads//2:] = attn_output[:, :, self.num_heads//2:].roll(group_size//2, dims=1)
 
